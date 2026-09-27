@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command, InvalidArgumentError } from 'commander';
 import { login } from './commands/login.js';
+import { serve, type ServeOptions } from './commands/serve.js';
 import {
   searchBuildCommand,
   searchRawCommand,
@@ -48,6 +49,15 @@ const parsePositiveInt = (value: string): number => {
   return parsed;
 };
 
+// Port 0 is meaningful for `serve` (ephemeral port) but not for search limits.
+const parsePort = (value: string): number => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new InvalidArgumentError('Value must be a non-negative integer.');
+  }
+  return parsed;
+};
+
 const collectValues = (value: string, previous: string[]): string[] => {
   previous.push(value);
   return previous;
@@ -79,6 +89,7 @@ search
     'Filter by retailer (e.g., SPAR, BILLA, HOFER)',
   )
   .option('-j, --json', 'Output JSON')
+  .option('--json-full', 'Output full structured JSON (all API fields)')
   .action(async (query: string, options: SearchCommandOptions) => {
     await searchRawCommand(query, { ...options, json: getJsonFlag(options) });
   });
@@ -113,6 +124,7 @@ search
     'Filter by retailer (e.g., SPAR, BILLA, HOFER)',
   )
   .option('-j, --json', 'Output JSON')
+  .option('--json-full', 'Output full structured JSON (all API fields)')
   .action(async (options: SearchBuildOptions) => {
     await searchBuildCommand({ ...options, json: getJsonFlag(options) });
   });
@@ -127,6 +139,21 @@ search
 search.action(() => {
   search.outputHelp();
 });
+
+program
+  .command('serve')
+  .description(
+    'Start a local REST API (POST /login, POST /set-zip, GET /search)',
+  )
+  .option('--host <address>', 'Host to bind (default: 127.0.0.1)')
+  .option(
+    '-p, --port <number>',
+    'Port to listen on, 0 for any free port (default: 3000)',
+    parsePort,
+  )
+  .action(async (options: ServeOptions) => {
+    await serve(options);
+  });
 
 program
   .command('set-zip <code>')

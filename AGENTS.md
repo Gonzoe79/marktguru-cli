@@ -42,8 +42,15 @@ a command module in `src/commands/`, which calls `ensureApiKey` (reads
 `simplifyOffer` in `src/commands/search.ts`. `src/query.ts` is pure and
 I/O-free, which is why it carries most of the test coverage.
 
+The REST server (`marktguru serve`, `src/commands/serve.ts`) exposes
+`performLogin` (`src/commands/login.ts`) and `performSearch`
+(`src/commands/search.ts`) over `node:http`; `/search` returns the json-full
+shape (full API offers plus a `descriptionLines` array per offer). Both cores
+are shared with the CLI commands, so the two surfaces cannot drift apart.
+
 Results go to stdout; `--explain` and every warning go to stderr, so `--json`
-output stays pipeable.
+output stays pipeable. `serve` likewise keeps response bodies JSON-only and
+logs request progress (e.g. auto-login) to stderr.
 
 ## Constraints
 
@@ -71,6 +78,11 @@ These are the things that are easy to break without noticing.
   new frontend bundle. `tests/live.test.js` runs the built CLI end to end
   against the live sites for both countries (isolated `HOME`), so `make test`
   needs network access and fails when the scraper breaks.
+- **The REST server is tested by spawning the built CLI, not in-process.**
+  `src/config.ts` resolves `homedir()` at import time, so `tests/server.test.js`
+  spawns `dist/cli.js serve --port 0` with an isolated `HOME` and must stay
+  offline; the networked endpoints are covered by the serve test in
+  `tests/live.test.js`.
 - **The key is stored in plaintext** at `~/.marktguru/config.json`. The `config`
   and `login` output truncates it — preserve that.
 - **`--retailer` filters client-side** on `advertisers[].name`, which is why

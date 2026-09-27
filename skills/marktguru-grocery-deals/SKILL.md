@@ -18,6 +18,7 @@ Query grocery deals from Marktguru in Austria and Germany. Supports raw queries,
 | `set-country <code>` | Set default country (`at` or `de`, default: `at`) |
 | `config`             | Show current configuration                        |
 | `login`              | Extract API key from marktguru.at/de              |
+| `serve`              | Start local REST API (login, set-zip, search)     |
 
 ---
 
@@ -77,6 +78,7 @@ npx @udondan/marktguru-cli search raw "Cola" --json
 | `--retailer <name>` / `-r` | Filter by retailer (e.g., SPAR, BILLA, HOFER) | all            |
 | `--zip <code>` / `-z`      | ZIP code for location-based results           | config default |
 | `--json` / `-j`            | Output JSON                                   | false          |
+| `--json-full`              | Full structured JSON (all API fields/filters) | false          |
 
 ### Structured Builder
 
@@ -199,6 +201,48 @@ npx @udondan/marktguru-cli search raw "Cola" --limit 3 --json
 | `discountPercent` | Discount percentage (null if not on sale) |
 | `externalUrl`     | Direct link to retailer (optional)        |
 
+For the complete API response — every offer field (`id`, `oldPrice`,
+`validityDates`, unit/volume/quantity, all advertisers) plus the
+`filters` block (retailers/brands/categories with result counts) — use
+`--json-full` instead:
+
+```bash
+npx @udondan/marktguru-cli search raw "Cola" --limit 1 --json-full
+```
+
+```json
+{
+  "query": "Cola",
+  "totalResults": 23,
+  "results": [
+    {
+      "id": 123,
+      "price": 1.49,
+      "oldPrice": 1.99,
+      "product": { "id": 999, "name": "Test Chips" },
+      "descriptionLines": [
+        "Test Chips [SnackCo]",
+        "€1.49 (was €1.99) -25% · €5.96/kg",
+        "250 g",
+        "BILLA PLUS · 3 days left"
+      ]
+    }
+  ],
+  "filters": {
+    "retailers": [{ "id": 1, "name": "BILLA", "resultsCount": 8 }],
+    "brands": [],
+    "categories": []
+  }
+}
+```
+
+Every entry in `results` additionally carries `descriptionLines` — the same per-offer
+data the text output prints (title, computed price incl. per-unit price, description,
+retailer/validity, URL), emoji-free.
+
+Both JSON modes reflect `--limit` and `--retailer` filtering and contain no
+emojis, so stdout stays safe to pipe into other tools.
+
 ---
 
 ## Human-Readable Output
@@ -213,6 +257,33 @@ Premium Bergbauern H-Milch [Salzburg Milch]
 
 📍 Retailers: Lidl (33), SPAR (30), PENNY (17), INTERSPAR (16), BILLA PLUS (11)
 ```
+
+---
+
+## REST API
+
+`serve` starts a local HTTP server (default `127.0.0.1:3000`) exposing `login`,
+`set-zip`, and `search` — all responses are JSON, emoji-free:
+
+```bash
+npx @udondan/marktguru-cli serve --port 8080
+```
+
+| Endpoint   | Method | Input                                                 | Response             |
+| ---------- | ------ | ----------------------------------------------------- | -------------------- |
+| `/login`   | POST   | optional body `{"country": "at" \| "de"}`             | `{success, apiKey}`  |
+| `/set-zip` | POST   | body `{"zipCode": "1010"}`                            | `{success, zipCode}` |
+| `/search`  | GET    | `q` (required), `limit`, `zip`, `retailer`, `country` | `--json-full` shape  |
+
+```bash
+curl -X POST localhost:8080/login
+curl -X POST localhost:8080/set-zip -d '{"zipCode":"1010"}'
+curl 'localhost:8080/search?q=milch&limit=2'
+```
+
+Errors use `{"success": false, "error"}` with status 400 (bad input), 401 (invalid
+key), or 502 (upstream API). `/search` auto-logins in the background when no key is
+stored; progress logs go to the server's stderr.
 
 ---
 

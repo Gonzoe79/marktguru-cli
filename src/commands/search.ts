@@ -55,12 +55,37 @@ interface SimpleSearchResult {
   offers: SimpleOffer[];
 }
 
+export type DescribedOffer = Offer & { descriptionLines: string[] };
+
+export interface FullSearchResult extends Omit<SearchResult, 'results'> {
+  query: string;
+  results: DescribedOffer[];
+}
+
+export function toFullSearchResult(
+  result: SearchResult,
+  results: Offer[],
+  totalResults: number,
+  query: string,
+): FullSearchResult {
+  return {
+    query,
+    totalResults,
+    results: results.map((offer) => ({
+      ...offer,
+      descriptionLines: offerDescriptionLines(offer),
+    })),
+    filters: result.filters,
+  };
+}
+
 export interface SearchCommandOptions {
   zip?: string;
   country?: string;
   limit?: number;
   retailer?: string;
   json?: boolean;
+  jsonFull?: boolean;
   explain?: boolean;
 }
 
@@ -112,6 +137,14 @@ export function formatOfferText(offer: Offer): string {
   return lines.join('\n');
 }
 
+const EMOJI_REGEX = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu;
+
+export function offerDescriptionLines(offer: Offer): string[] {
+  return formatOfferText(offer)
+    .split('\n')
+    .map((line) => line.replace(EMOJI_REGEX, '').trim());
+}
+
 export function formatResultsText(result: SearchResult, query: string): string {
   const lines: string[] = [];
 
@@ -155,15 +188,12 @@ function emitWarnings(warnings: string[]): void {
 }
 
 async function ensureApiKey(
-  json?: boolean,
+  log: (msg: string) => void,
   country?: string,
 ): Promise<string | undefined> {
   const config = await getConfig();
   if (config.apiKey) return config.apiKey;
 
-  const log = json
-    ? (msg: string) => console.error(msg)
-    : (msg: string) => console.log(msg);
   log('No API key configured. Running login...');
 
   const apiKey = await extractApiKey({
@@ -174,11 +204,20 @@ async function ensureApiKey(
   return apiKey;
 }
 
-async function runSearch(
+export interface PerformSearchOptions {
+  zip?: string;
+  country?: string;
+  limit?: number;
+  retailer?: string;
+  log?: (msg: string) => void;
+}
+
+export async function performSearch(
   query: string,
-  options: SearchCommandOptions,
-): Promise<void> {
-  const apiKey = await ensureApiKey(options.json, options.country);
+  options: PerformSearchOptions = {},
+): Promise<FullSearchResult> {
+  const log = options.log ?? ((msg: string) => console.error(msg));
+  const apiKey = await ensureApiKey(log, options.country);
   // Fetch more results if filtering by retailer (we'll filter client-side)
   const limit = normalizeLimit(options.limit);
   const fetchLimit = options.retailer ? Math.max(limit, 100) : limit;
@@ -207,20 +246,35 @@ async function runSearch(
     filteredResults = filteredResults.slice(0, limit);
   }
 
-  if (options.json) {
+  return toFullSearchResult(result, filteredResults, totalResults, query);
+}
+
+async function runSearch(
+  query: string,
+  options: SearchCommandOptions,
+): Promise<void> {
+  const full = await performSearch(query, {
+    zip: options.zip,
+    country: options.country,
+    limit: options.limit,
+    retailer: options.retailer,
+    log:
+      Boolean(options.json) || Boolean(options.jsonFull)
+        ? (msg: string) => console.error(msg)
+        : (msg: string) => console.log(msg),
+  });
+
+  if (options.jsonFull) {
+    console.log(JSON.stringify(full, null, 2));
+  } else if (options.json) {
     const simple: SimpleSearchResult = {
       query,
-      total: totalResults,
-      offers: filteredResults.map(simplifyOffer),
+      total: full.totalResults,
+      offers: full.results.map(simplifyOffer),
     };
     console.log(JSON.stringify(simple, null, 2));
   } else {
-    console.log(
-      formatResultsText(
-        { ...result, results: filteredResults, totalResults },
-        query,
-      ),
-    );
+    console.log(formatResultsText(full, query));
   }
 }
 

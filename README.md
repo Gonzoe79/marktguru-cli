@@ -110,6 +110,7 @@ Available for both `search raw` and `search build`:
 - `-n, --limit <number>`: Number of results (default: 10)
 - `-r, --retailer <name>`: Filter by retailer (client-side)
 - `-j, --json`: JSON output
+- `--json-full`: Full structured JSON output (all API fields and filters)
 
 If no API key is configured, `search` will automatically run `login` to extract one.
 
@@ -123,6 +124,37 @@ Builder-only:
 - `--or <value>`: Add a term to an OR group (repeatable)
 - `--group <value>`: Add a raw group wrapped in parentheses (repeatable)
 - `--explain`: Print the built query to stderr
+
+## REST API
+
+Start a local HTTP server exposing `login`, `set-zip`, and `search`:
+
+```bash
+marktguru serve                    # listens on 127.0.0.1:3000
+marktguru serve --port 8080 --host 0.0.0.0
+```
+
+| Endpoint   | Method | Input                                                 | Response                              |
+| ---------- | ------ | ----------------------------------------------------- | ------------------------------------- |
+| `/login`   | POST   | optional JSON body `{"country": "at" \| "de"}`        | `{"success": true, "apiKey": "..."}`  |
+| `/set-zip` | POST   | JSON body `{"zipCode": "1010"}`                       | `{"success": true, "zipCode": "..."}` |
+| `/search`  | GET    | `q` (required), `limit`, `zip`, `retailer`, `country` | json-full shape (see below)           |
+
+All responses are JSON without emojis. Errors use the envelope
+`{"success": false, "error": "..."}` with status 400 (bad input), 401 (invalid API
+key), 404 / 405, or 502 (upstream API failure).
+
+`/search` returns the same structure as `search raw --json-full`: the full API offer
+objects (all fields) plus a `descriptionLines` array on each offer with the same data
+the text output prints (title, computed price incl. per-unit price, retailer/validity,
+URL). Like the CLI, `/search` auto-logins in the background when no API key is
+configured; progress logs go to the server's stderr, responses stay pure JSON.
+
+```bash
+curl -X POST localhost:3000/login
+curl -X POST localhost:3000/set-zip -d '{"zipCode":"1010"}'
+curl 'localhost:3000/search?q=milch&limit=2'
+```
 
 ## Query Syntax (Observed)
 

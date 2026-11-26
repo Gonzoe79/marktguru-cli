@@ -1,5 +1,9 @@
 # marktguru-cli 🧘‍♂️
 
+> [!NOTE]
+> `--json-full`, `descriptionLines` und `serve` aus diesem Fork sind jetzt upstream in
+> [udondan/marktguru](https://github.com/udondan/marktguru) umgesetzt (npm: [`@udondan/marktguru`](https://www.npmjs.com/package/@udondan/marktguru)), zusammen mit einem MCP-Server.
+
 [![Test](https://github.com/udondan/marktguru-cli/actions/workflows/test.yml/badge.svg)](https://github.com/udondan/marktguru-cli/actions/workflows/test.yml)
 [![npm](https://img.shields.io/npm/v/@udondan/marktguru-cli.svg)](https://www.npmjs.com/package/@udondan/marktguru-cli)
 [![license](https://img.shields.io/github/license/udondan/marktguru-cli.svg)](https://github.com/udondan/marktguru-cli/blob/main/LICENSE)
